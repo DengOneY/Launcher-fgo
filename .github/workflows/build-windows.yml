@@ -18,19 +18,50 @@ jobs:
         uses: microsoft/setup-msbuild@v1
 
       - name: Build solution (Release x64)
+        shell: powershell
         run: |
+          Write-Host "Running msbuild..."
           msbuild Launcher.sln /m /p:Configuration=Release /p:Platform=x64
 
       - name: Show output folder for debugging
+        shell: powershell
         run: |
-          echo "Listing build output"
-          dir "MoonCancer.Launcher\bin\x64\Release" || echo "No output folder found"
+          Write-Host "Listing expected output folder:"
+          if (Test-Path "MoonCancer.Launcher\bin\x64\Release") {
+            Get-ChildItem -Path "MoonCancer.Launcher\bin\x64\Release" -Recurse | Select-Object FullName, Length
+          } else {
+            Write-Host "No output folder found: MoonCancer.Launcher\bin\x64\Release"
+          }
 
       - name: Collect build output
+        shell: powershell
         run: |
-          mkdir artifact
-          robocopy "MoonCancer.Launcher\bin\x64\Release" artifact /E /NFL /NDL /NJH /NJS || exit 0
-          powershell -Command "if ((Get-ChildItem -Path artifact -Recurse | Measure-Object).Count -gt 0) { Compress-Archive -Path 'artifact\\*' -DestinationPath 'MoonCancer-Release-x64.zip' } else { New-Item -Path 'MoonCancer-Release-x64.zip' -ItemType File | Out-Null }"
+          # Ensure artifact folder exists
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+
+          # Run robocopy to copy build outputs if any. robocopy returns non-zero codes in many normal cases,
+          # so suppress its exit code and continue.
+          $source = "MoonCancer.Launcher\bin\x64\Release"
+          if (Test-Path $source) {
+            Write-Host "Copying files from $source to artifact..."
+            robocopy $source artifact /E /NFL /NDL /NJH /NJS | Out-Null
+          } else {
+            Write-Host "Source path does not exist: $source"
+          }
+
+          # If artifact contains files, compress them; otherwise create an empty zip so upload step always has a file.
+          $files = Get-ChildItem -Path artifact -Recurse -File -ErrorAction SilentlyContinue
+          if ($files -and $files.Count -gt 0) {
+            Write-Host "Compressing artifact files..."
+            if (Test-Path 'MoonCancer-Release-x64.zip') { Remove-Item 'MoonCancer-Release-x64.zip' -Force }
+            Compress-Archive -Path (Join-Path -Path (Get-Item artifact).FullName -ChildPath '*') -DestinationPath 'MoonCancer-Release-x64.zip' -Force
+            Write-Host "Created MoonCancer-Release-x64.zip"
+          } else {
+            Write-Host "No files to compress; creating empty zip placeholder..."
+            if (-not (Test-Path 'MoonCancer-Release-x64.zip')) {
+              New-Item -Path 'MoonCancer-Release-x64.zip' -ItemType File | Out-Null
+            }
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
