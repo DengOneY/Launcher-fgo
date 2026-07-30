@@ -100,5 +100,5 @@ jobs:
             Get-ChildItem 'MoonCancer-Release-x64.zip' | Select-Object Name, Length
           } else {
             Write-Host "Zip NOT found in workspace."
-          }
-          修复：忽略机器人复制非致命退出代码，并使文件上传稳健
+            }
+  #         修复：忽略机器人复制非致命退出代码，并使文件上传稳健
