@@ -1,0 +1,39 @@
+name: Build MoonCancer Launcher (Windows)
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Build solution (Release x64)
+        run: |
+          msbuild Launcher.sln /m /p:Configuration=Release /p:Platform=x64
+
+      - name: Show output folder for debugging
+        run: |
+          echo "Listing build output"
+          dir "MoonCancer.Launcher\bin\x64\Release" || echo "No output folder found"
+
+      - name: Collect build output
+        run: |
+          mkdir artifact
+          robocopy "MoonCancer.Launcher\bin\x64\Release" artifact /E /NFL /NDL /NJH /NJS || exit 0
+          powershell -Command "if ((Get-ChildItem -Path artifact -Recurse | Measure-Object).Count -gt 0) { Compress-Archive -Path 'artifact\\*' -DestinationPath 'MoonCancer-Release-x64.zip' } else { New-Item -Path 'MoonCancer-Release-x64.zip' -ItemType File | Out-Null }"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoonCancer-Release-x64
+          path: MoonCancer-Release-x64.zip
